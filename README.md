@@ -14,7 +14,8 @@ To install copy gdrivebackend.py to duplicity's backends directory.
 
 Dependency installation
 -----------------------
-It requires google-api-python-client: https://github.com/google/google-api-python-client
+It requires google-api-python-client:
+https://github.com/google/google-api-python-client
 
 To install execute:
 
@@ -27,8 +28,12 @@ or:
 
 Configuration
 -------------
-Create a Service Account or Installed App credential at developer console:
+At google developer console:
 https://console.developers.google.com
+
+* Create a project.
+* Enable Drive API for it.
+* Create a Service Account or Installed App credential.
 
 
 ### To configure with Installed App credential:

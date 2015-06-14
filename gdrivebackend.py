@@ -3,7 +3,9 @@
 # 2015-06-14
 #
 #
-# This backend requires google-api-python-client:
+# Dependency installation
+# -----------------------
+# It requires google-api-python-client:
 # https://github.com/google/google-api-python-client
 #
 # To install execute:
@@ -12,31 +14,39 @@
 # or:
 # easy_install --upgrade google-api-python-client
 #
-# Create a Service Account or Installed App credential at developer console:
+#
+# Configuration
+# -------------
+# At google developer console:
 # https://console.developers.google.com
+#
+# * Create a project.
+# * Enable Drive API for it.
+# * Create a Service Account or Installed App credential.
 #
 #
 # ### To configure with Installed App credential:
-# Create a Installed App credential at google developer console.
-# Get client id and client secret key.
+# * Create a Installed App credential at google developer console.
+# * Get **client id** and **client secret key**.
 #
 # export GDRIVE_APP_TOKEN_FILE='path_to_save_token_file.key'
 # export GDRIVE_APP_SECRET='client_secret_key'
 # gdrive://installed_app_client_id/path
 #
-# Run duplicity to get authorization url.
+# * Run duplicity to get authorization url.
 #
 # export GDRIVE_APP_CODE='response_code'
 #
-# Run duplicity to generate the token file.
+# * Run duplicity to generate the token file.
+#
 # Now GDRIVE_APP_CODE isn't needed any more and can be removed.
 #
 #
 # ### To configure with Service Account credential:
 # Note that Service Account has it's own drive, it won't upload to your drive.
-# Create a Service Account credential at google developer console.
-# Get service account email address.
-# Generate a .p12 key file.
+# * Create a Service Account credential at google developer console.
+# * Get service account email address.
+# * Generate a .p12 key file.
 #
 # export GDRIVE_SERVICE_KEY_FILE='path_to_key_file.p12'
 # gdrive://service_account_email/path
