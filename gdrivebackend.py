@@ -51,12 +51,14 @@
 # export GDRIVE_SERVICE_KEY_FILE='path_to_key_file.p12'
 # gdrive://service_account_email/path
 #
-
 import duplicity.backend
 from duplicity.errors import BackendException
 from duplicity import log
 import os
 import string
+
+### for duplicity 0.6.23
+from duplicity.backend import retry
 
 
 class GDriveBackend(duplicity.backend.Backend):
@@ -130,7 +132,7 @@ class GDriveBackend(duplicity.backend.Backend):
             log.Info('GDRIVE: authenticated by response code')
           except:
             authorize_url = flow.step1_get_authorize_url()
-            raise BackendException('Invalid GDRIVE_APP_CODE, update it with code from: ' + authorize_url)
+            raise BackendException("Invalid GDRIVE_APP_CODE, update it with code from: %s" % authorize_url)
 
           # save token
           fd = file(TOKEN_FILE, 'wb')
@@ -138,7 +140,7 @@ class GDriveBackend(duplicity.backend.Backend):
           fd.close()
         else:
           authorize_url = flow.step1_get_authorize_url()
-          raise BackendException('Authorization required, set GDRIVE_APP_CODE with code from: ' + authorize_url)
+          raise BackendException("Authorization required, set GDRIVE_APP_CODE with code from: %s" % authorize_url)
 
     # not configured
     else:
@@ -287,7 +289,7 @@ class GDriveBackend(duplicity.backend.Backend):
         reason = j['error']['errors'][0]['reason']
         msg = j['error']['message']
       except:
-        raise e
+        raise
 
       if (403 == code) and ('abuse' == reason):
         log.Info("GDRIVE: downloading with acknowledgeAbuse because google-api said error 403 '%s'" % msg)
@@ -318,59 +320,73 @@ class GDriveBackend(duplicity.backend.Backend):
 
 
 ### for duplicity 0.7.03
-  def _get(self, remote_filename, local_path):
-    self.__get(remote_filename, local_path.name)
-
-  def _put(self, source_path, remote_filename):
-    self.__put(source_path.name, remote_filename)
-
-  def _list(self):
-    return self.__list()
-
-  def _delete(self, filename):
-    self.__delete(filename)
-
-  def _query(self, filename):
-    return self.__query(filename)
-
-
-
-### for duplicity 0.6.23
-#  def delete(self, filename_list):
-#    for filename in filename_list:
-#      self.__delete(filename)
-#
-#  def get(self, remote_filename, local_path):
+#  def _get(self, remote_filename, local_path):
 #    self.__get(remote_filename, local_path.name)
 #
-#  def put(self, source_path, remote_filename = None):
-#    if not remote_filename: remote_filename = source_path.get_filename()
+#  def _put(self, source_path, remote_filename):
 #    self.__put(source_path.name, remote_filename)
 #
 #  def _list(self):
 #    return self.__list()
 #
-#  def _query_file_info(self, filename):
-#    try:
-#      size = self.__query(filename)['size']
-#    except:
-#      size = None
-#    if size == -1: size = None
-#    return {'size': size}
+#  def _delete(self, filename):
+#    self.__delete(filename)
+#
+#  def _query(self, filename):
+#    return self.__query(filename)
+#
+#duplicity.backend.register_backend('gdrive', GDriveBackend)
+#duplicity.backend.uses_netloc.extend(['gdrive'])
 
 
 
-### register backend
+### for duplicity 0.6.23
+  @retry
+  def delete(self, filename_list, raise_errors=False):
+    try:
+      for filename in filename_list:
+        self.__delete(filename)
+    except Exception as e:
+      self.__error(str(e), raise_errors)
+
+  @retry
+  def get(self, remote_filename, local_path, raise_errors=False):
+    try:
+      self.__get(remote_filename, local_path.name)
+    except Exception as e:
+      self.__error(str(e), raise_errors)
+
+  @retry
+  def put(self, source_path, remote_filename=None, raise_errors=False):
+    try:
+      if not remote_filename: remote_filename = source_path.get_filename()
+      self.__put(source_path.name, remote_filename)
+    except Exception as e:
+      self.__error(str(e), raise_errors)
+
+  @retry
+  def _list(self, raise_errors=False):
+    try:
+      return self.__list()
+    except Exception as e:
+      self.__error(str(e), raise_errors)
+
+  def _query_file_info(self, filename):
+    try:
+      size = self.__query(filename)['size']
+    except:
+      size = None
+    if size == -1: size = None
+    return {'size': size}
+
+  def __error(self, msg, raise_errors=True):
+    if raise_errors:
+      raise BackendException(msg)
+    else:
+      log.FatalError(msg, log.ErrorCode.backend_error)
+
 duplicity.backend.register_backend('gdrive', GDriveBackend)
-try:
-  # for duplicity 0.7.03
-  duplicity.backend.uses_netloc.extend(['gdrive'])
-except:
-  try:
-    # for duplicity 0.6.23
-    duplicity.backend._ensure_urlparser_initialized()
-    duplicity.backend.urlparser.uses_netloc.extend(['gdrive'])
-    duplicity.backend.urlparser.clear_cache()
-  except:
-    pass
+duplicity.backend._ensure_urlparser_initialized()
+duplicity.backend.urlparser.uses_netloc.extend(['gdrive'])
+duplicity.backend.urlparser.clear_cache()
 
