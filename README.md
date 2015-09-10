@@ -5,8 +5,6 @@ Backend installation
 --------------------
 It was tested on duplicity 0.6.23 and 0.7.03.
 
-To get it working on 0.7 need edit it and comment/uncomment some part of code.
-
 To install copy gdrivebackend.py to duplicity's backends directory.
 
 `/usr/lib/python2.7/dist-packages/duplicity/backends/`
