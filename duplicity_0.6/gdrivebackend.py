@@ -48,7 +48,7 @@
 # * Get service account email address.
 # * Generate a .p12 key file.
 #
-# export GDRIVE_SERVICE_KEY_FILE='path_to_key_file.p12'
+# export GDRIVE_SERVICE_KEY_FILE='path_to_key_file.json'
 # gdrive://service_account_email/path
 #
 import duplicity.backend
@@ -77,7 +77,7 @@ class GDriveBackend(duplicity.backend.Backend):
       from apiclient.http import MediaIoBaseDownload
       from oauth2client.client import OAuth2Credentials
       from oauth2client.client import OAuth2WebServerFlow
-      from oauth2client.client import SignedJwtAssertionCredentials
+      from oauth2client.service_account import ServiceAccountCredentials
       global HttpError
       from apiclient.errors import HttpError
       global simplejson
@@ -94,14 +94,9 @@ class GDriveBackend(duplicity.backend.Backend):
 
     # authenticate by service account
     if ('GDRIVE_SERVICE_KEY_FILE' in os.environ) and (parsed_url.username) and (parsed_url.hostname):
-      SERVICE_EMAIL = parsed_url.username + '@' + parsed_url.hostname
       SERVICE_KEY_FILE = os.environ['GDRIVE_SERVICE_KEY_FILE']
 
-      fd = file(SERVICE_KEY_FILE, 'rb')
-      SERVICE_KEY = fd.read()
-      fd.close()
-
-      credentials = SignedJwtAssertionCredentials(SERVICE_EMAIL, SERVICE_KEY, OAUTH_SCOPE)
+      credentials = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_KEY_FILE, OAUTH_SCOPE)
 
       log.Info('GDRIVE: authenticated by service account')
 
