@@ -60,7 +60,7 @@ Note that Service Account has it's own drive, it won't upload to your drive.
 
 * Create a Service Account credential at google developer console.
 * Get service account email address.
-* Generate a .p12 key file.
+* Generate a .json key file.
 
 ```
 export GDRIVE_SERVICE_KEY_FILE='path_to_key_file.p12'
