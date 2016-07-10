@@ -147,10 +147,17 @@ class GDriveBackend(duplicity.backend.Backend):
 
     self.http = credentials.authorize(httplib2.Http())
     self.drive = build('drive', 'v2', http=self.http)
+    self.parent_id = None
+    self.parent_folders = string.split(parsed_url.path, '/')
+
+
+  def __parent_id(self):
+    if self.parent_id is not None:
+      return self.parent_id
 
     # find or create folder tree
     parent_id = 'root'
-    folder_names = string.split(parsed_url.path, '/')
+    folder_names = self.parent_folders
 
     for folder_name in folder_names:
       if not folder_name: continue
@@ -189,11 +196,12 @@ class GDriveBackend(duplicity.backend.Backend):
 
     # parsed_url.path id
     self.parent_id = parent_id
+    return self.parent_id
 
 
   def __list(self):
     param = {
-      'q': "'" + self.parent_id + "' in parents and trashed = false",
+      'q': "'" + self.__parent_id() + "' in parents and trashed = false",
       'maxResults': 1000
     }
 
@@ -215,7 +223,7 @@ class GDriveBackend(duplicity.backend.Backend):
 
   def __getInfo(self, filename):
     file_list = self.drive.files().list(**{
-      'q': "'" + self.parent_id + "' in parents and "
+      'q': "'" + self.__parent_id() + "' in parents and "
         "title = '" + filename.replace("\\", "\\\\").replace("'", "\\'") + "' and "
         "trashed = false"
       }).execute()
@@ -240,7 +248,7 @@ class GDriveBackend(duplicity.backend.Backend):
     log.Debug("GDRIVE: gdrive.__delete('%s')" % filename)
 
     file_list = self.drive.files().list(**{
-      'q': "'" + self.parent_id + "' in parents and "
+      'q': "'" + self.__parent_id() + "' in parents and "
         "title = '" + filename + "' and "
         "trashed = false"
       }).execute()
@@ -305,7 +313,7 @@ class GDriveBackend(duplicity.backend.Backend):
       'title': remote_filename,
       'parents': [{
         'kind': 'drive#fileLink',
-        'id': self.parent_id
+        'id': self.__parent_id()
         }]
       }
     self.drive.files().insert(body=body, media_body=media_body).execute()
