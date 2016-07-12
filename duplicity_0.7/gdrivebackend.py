@@ -236,11 +236,12 @@ class GDriveBackend(duplicity.backend.Backend):
     try:
       f = self.__getInfo(filename)
       size = int(f['fileSize'])
-    except:
+    except BackendException:
       size = -1
+    except:
+      return None
 
     log.Debug("GDRIVE: gdrive.__query('%s') = %d" % (filename, size))
-
     return {'size': size}
 
 
