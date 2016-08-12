@@ -69,11 +69,13 @@ class GDriveBackend(duplicity.backend.Backend):
 
     # Import Google APIs
     try:
-      global MediaIoBaseDownload
-      global MediaFileUpload
+      global httplib2
       import httplib2
+      global build
       from apiclient.discovery import build
+      global MediaFileUpload
       from apiclient.http import MediaFileUpload
+      global MediaIoBaseDownload
       from apiclient.http import MediaIoBaseDownload
       from oauth2client.client import OAuth2Credentials
       from oauth2client.client import OAuth2WebServerFlow
@@ -98,7 +100,7 @@ class GDriveBackend(duplicity.backend.Backend):
 
       credentials = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_KEY_FILE, OAUTH_SCOPE)
 
-      log.Info('GDRIVE: authenticated by service account')
+      log.Info('GDRIVE: auth by service account')
 
     # authenticate by installed app
     elif ('GDRIVE_APP_SECRET' in os.environ) and ('GDRIVE_APP_TOKEN_FILE' in os.environ) and (parsed_url.hostname):
@@ -113,7 +115,7 @@ class GDriveBackend(duplicity.backend.Backend):
         credentials = OAuth2Credentials.from_json(fd.read())
         fd.close()
 
-        log.Info('GDRIVE: authenticated by app token')
+        log.Info('GDRIVE: auth by app token')
 
       except:
         log.Info("GDRIVE: couldn't authenticate with token file")
@@ -124,7 +126,7 @@ class GDriveBackend(duplicity.backend.Backend):
           APP_CODE = os.environ['GDRIVE_APP_CODE']
           try:
             credentials = flow.step2_exchange(APP_CODE)
-            log.Info('GDRIVE: authenticated by response code')
+            log.Info('GDRIVE: auth by response code')
           except:
             authorize_url = flow.step1_get_authorize_url()
             raise BackendException("Invalid GDRIVE_APP_CODE, update it with code from: %s" % authorize_url)
@@ -145,19 +147,25 @@ class GDriveBackend(duplicity.backend.Backend):
         '*** for Service Account: GDRIVE_SERVICE_KEY_FILE, gdrive://service_account_email/path'
         )
 
-    self.http = credentials.authorize(httplib2.Http())
-    self.drive = build('drive', 'v2', http=self.http)
-    self.parent_id = None
-    self.parent_folders = string.split(parsed_url.path, '/')
+    self.credentials = credentials
+    self.path = parsed_url.path
+    self.didInit = None
 
 
-  def __parent_id(self):
-    if self.parent_id is not None:
-      return self.parent_id
+  def __start(self):
+    if self.didInit is not None:
+      return
+
+    http = self.credentials.authorize(httplib2.Http())
+
+    try:
+      self.drive = build('drive', 'v2', http=http, cache_discovery=False)
+    except Exception as e:
+      raise BackendException("GDRIVE: build drive instance failed: %s: %s" % (e.__class__.__name__, e))
 
     # find or create folder tree
     parent_id = 'root'
-    folder_names = self.parent_folders
+    folder_names = string.split(self.path, '/')
 
     for folder_name in folder_names:
       if not folder_name: continue
@@ -172,7 +180,7 @@ class GDriveBackend(duplicity.backend.Backend):
           # list items on parent folder
           file_list = self.drive.files().list(**param).execute()
         except Exception as e:
-          raise BackendException("GDRIVE: list files Failed: %s" % e)
+          raise BackendException("GDRIVE: list files failed: %s: %s" % (e.__class__.__name__, e))
 
         # find folder
         folder = next((
@@ -193,7 +201,7 @@ class GDriveBackend(duplicity.backend.Backend):
             'parents': [{'id': parent_id}]
             }).execute()
         except Exception as e:
-          raise BackendException("GDRIVE: create folder '%s' failed: %s" % (folder_name, e))
+          raise BackendException("GDRIVE: create folder '%s' failed: %s: %s" % (folder_name, e.__class__.__name__, e))
 
         log.Info("GDRIVE: created folder '%s'" % folder_name)
 
@@ -202,12 +210,15 @@ class GDriveBackend(duplicity.backend.Backend):
 
     # parsed_url.path id
     self.parent_id = parent_id
-    return self.parent_id
+
+    self.didInit = True
 
 
   def __list(self):
+    self.__start()
+
     param = {
-      'q': "'" + self.__parent_id() + "' in parents and trashed = false",
+      'q': "'" + self.parent_id + "' in parents and trashed = false",
       'maxResults': 1000
     }
 
@@ -219,7 +230,7 @@ class GDriveBackend(duplicity.backend.Backend):
       try:
         file_list = self.drive.files().list(**param).execute()
       except Exception as e:
-        raise BackendException("GDRIVE: list files Failed: %s" % e)
+        raise BackendException("GDRIVE: list files failed: %s: %s" % (e.__class__.__name__, e))
 
       res.extend([item['title'] for item in file_list['items']])
 
@@ -234,42 +245,45 @@ class GDriveBackend(duplicity.backend.Backend):
   def __getInfo(self, filename):
     try:
       file_list = self.drive.files().list(**{
-        'q': "'" + self.__parent_id() + "' in parents and "
+        'q': "'" + self.parent_id + "' in parents and "
           "title = '" + filename.replace("\\", "\\\\").replace("'", "\\'") + "' and "
           "trashed = false"
         }).execute()
     except Exception as e:
-      raise BackendException("GDRIVE: get info '%s' Failed: %s" % (filename, e))
+      raise BackendException("GDRIVE: get file info '%s' failed: %s: %s" % (filename, e.__class__.__name__, e))
 
     if not file_list['items'][0]:
-      raise BackendException("GDRIVE: file '%s' not found" % filename)
+      return None
     return file_list['items'][0]
 
 
   def __query(self, filename):
-    try:
-      f = self.__getInfo(filename)
-      size = int(f['fileSize'])
-    except BackendException:
+    self.__start()
+
+    f = self.__getInfo(filename)
+
+    if f is None:
       size = -1
-    except:
-      return None
+    else:
+      size = int(f['fileSize'])
 
     log.Debug("GDRIVE: gdrive.__query('%s') = %d" % (filename, size))
     return {'size': size}
 
 
   def __delete(self, filename):
+    self.__start()
+
     log.Debug("GDRIVE: gdrive.__delete('%s')" % filename)
 
     try:
       file_list = self.drive.files().list(**{
-        'q': "'" + self.__parent_id() + "' in parents and "
+        'q': "'" + self.parent_id + "' in parents and "
           "title = '" + filename + "' and "
           "trashed = false"
         }).execute()
     except Exception as e:
-      raise BackendException("GDRIVE: delete '%s' Failed: %s" % (filename, e))
+      raise BackendException("GDRIVE: delete '%s' failed: %s: %s" % (filename, e.__class__.__name__, e))
 
     if file_list and file_list['items']:
       for item in file_list['items']:
@@ -277,7 +291,7 @@ class GDriveBackend(duplicity.backend.Backend):
           try:
             self.drive.files().delete(fileId=item['id']).execute()
           except Exception as e:
-            raise BackendException("GDRIVE: delete '%s' Failed: %s" % (filename, e))
+            raise BackendException("GDRIVE: delete '%s' failed: %s: %s" % (filename, e.__class__.__name__, e))
 
           log.Info("GDRIVE: deleted '%s' (id='%s')" % (filename, item['id']))
 
@@ -301,6 +315,8 @@ class GDriveBackend(duplicity.backend.Backend):
 
 
   def __get(self, remote_filename, local_filename):
+    self.__start()
+
     log.Info("GDRIVE: downloading '%s'" % remote_filename)
 
     fid = self.__getInfo(remote_filename)['id']
@@ -314,18 +330,20 @@ class GDriveBackend(duplicity.backend.Backend):
         reason = j['error']['errors'][0]['reason']
         msg = j['error']['message']
       except Exception as e2:
-        raise BackendException("GDRIVE: download '%s' Failed: %s" % (remote_filename, e2))
+        raise BackendException("GDRIVE: download '%s' failed: %s: %s" % (remote_filename, e2.__class__.__name__, e2))
 
       if (403 == code) and ('abuse' == reason):
         log.Info("GDRIVE: downloading with acknowledgeAbuse because google-api said error 403 '%s'" % msg)
         self.__try_download(fid, local_filename, 'true')
       else:
-        raise BackendException("GDRIVE: download '%s' Failed: %s" % (remote_filename, e))
+        raise BackendException("GDRIVE: download '%s' failed: %s: %s" % (remote_filename, e.__class__.__name__, e))
 
     log.Info("GDRIVE: download done '%s'" % remote_filename)
 
 
   def __put(self, local_filename, remote_filename):
+    self.__start()
+
     self.__delete(remote_filename)
 
     log.Info("GDRIVE: uploading '%s'" % remote_filename)
@@ -335,13 +353,13 @@ class GDriveBackend(duplicity.backend.Backend):
       'title': remote_filename,
       'parents': [{
         'kind': 'drive#fileLink',
-        'id': self.__parent_id()
+        'id': self.parent_id
         }]
       }
     try:
       self.drive.files().insert(body=body, media_body=media_body).execute()
     except Exception as e:
-      raise BackendException("GDRIVE: upload '%s' Failed: %s" % (remote_filename, e))
+      raise BackendException("GDRIVE: upload '%s' failed: %s: %s" % (remote_filename, e.__class__.__name__, e))
 
     log.Info("GDRIVE: upload done '%s'" % remote_filename)
 
@@ -399,13 +417,13 @@ duplicity.backend.uses_netloc.extend(['gdrive'])
 #    except Exception as e:
 #      self.__error(str(e), raise_errors)
 #
-#  def _query_file_info(self, filename):
+#  @retry
+#  def _query_file_info(self, filename, raise_errors=False):
 #    try:
-#      size = self.__query(filename)['size']
-#    except:
-#      size = None
-#    if size == -1: size = None
-#    return {'size': size}
+#      return self.__query(filename)
+#    except Exception as e:
+#      self.__error(str(e), raise_errors)
+#      return {'size': None}
 #
 #  def __error(self, msg, raise_errors=True):
 #    if raise_errors:
