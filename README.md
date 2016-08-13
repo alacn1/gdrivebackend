@@ -3,7 +3,7 @@ Duplicity Google Drive Backend
 
 Backend installation
 --------------------
-It was tested on duplicity 0.6.23 and 0.7.03.
+It was tested on duplicity 0.7.06.
 
 To install copy gdrivebackend.py to duplicity's backends directory.
 

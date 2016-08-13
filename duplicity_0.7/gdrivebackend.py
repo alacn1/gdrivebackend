@@ -57,9 +57,6 @@ from duplicity import log
 import os
 import string
 
-### for duplicity 0.6.23
-#from duplicity.backend import retry
-
 
 class GDriveBackend(duplicity.backend.Backend):
   """Connect to remote store using Google Drive API"""
@@ -383,57 +380,4 @@ class GDriveBackend(duplicity.backend.Backend):
 
 duplicity.backend.register_backend('gdrive', GDriveBackend)
 duplicity.backend.uses_netloc.extend(['gdrive'])
-
-
-
-### for duplicity 0.6.23
-#  @retry
-#  def delete(self, filename_list, raise_errors=False):
-#    try:
-#      for filename in filename_list:
-#        self.__delete(filename)
-#    except Exception as e:
-#      self.__error(str(e), raise_errors)
-#
-#  @retry
-#  def get(self, remote_filename, local_path, raise_errors=False):
-#    try:
-#      self.__get(remote_filename, local_path.name)
-#    except Exception as e:
-#      self.__error(str(e), raise_errors)
-#
-#  @retry
-#  def put(self, source_path, remote_filename=None, raise_errors=False):
-#    try:
-#      if not remote_filename: remote_filename = source_path.get_filename()
-#      self.__put(source_path.name, remote_filename)
-#    except Exception as e:
-#      self.__error(str(e), raise_errors)
-#
-#  @retry
-#  def _list(self, raise_errors=False):
-#    try:
-#      return self.__list()
-#    except Exception as e:
-#      self.__error(str(e), raise_errors)
-#
-#  @retry
-#  def _query_file_info(self, filename, raise_errors=False):
-#    try:
-#      return self.__query(filename)
-#    except Exception as e:
-#      self.__error(str(e), raise_errors)
-#      return {'size': None}
-#
-#  def __error(self, msg, raise_errors=True):
-#    if raise_errors:
-#      raise BackendException(msg)
-#    else:
-#      log.FatalError(msg, log.ErrorCode.backend_error)
-#
-#duplicity.backend.register_backend('gdrive', GDriveBackend)
-#duplicity.backend._ensure_urlparser_initialized()
-#duplicity.backend.urlparser.uses_netloc.extend(['gdrive'])
-#duplicity.backend.urlparser.clear_cache()
-#
 
