@@ -84,8 +84,8 @@ class GDriveBackend(duplicity.backend.Backend):
     except ImportError:
       raise BackendException(
         'Google Drive backend requires google-api-python-client. To install execute: '
-        "'pip install --upgrade google-api-python-client'"
-        'or:'
+        "'pip install --upgrade google-api-python-client' "
+        'or: '
         "'easy_install --upgrade google-api-python-client'"
         )
 
@@ -236,7 +236,14 @@ class GDriveBackend(duplicity.backend.Backend):
 
     log.Debug('GDRIVE: gdrive.__list() = %s' % res)
 
-    return res
+    ret = set()
+    dup = [item for item in res if item in ret or ret.add(item)]
+    ret = list(ret)
+
+    if dup:
+      log.Warn('GDRIVE: WARNING! duplicate files: %s' % dup)
+
+    return ret
 
 
   def __getInfo(self, filename):
@@ -244,7 +251,8 @@ class GDriveBackend(duplicity.backend.Backend):
       file_list = self.drive.files().list(**{
         'q': "'" + self.parent_id + "' in parents and "
           "title = '" + filename.replace("\\", "\\\\").replace("'", "\\'") + "' and "
-          "trashed = false"
+          "trashed = false",
+        'orderBy': 'modifiedDate desc'
         }).execute()
     except Exception as e:
       raise BackendException("GDRIVE: get file info '%s' failed: %s: %s" % (filename, e.__class__.__name__, e))
@@ -362,7 +370,7 @@ class GDriveBackend(duplicity.backend.Backend):
 
 
 
-### for duplicity 0.7.03
+### for duplicity 0.7.06
   def _get(self, remote_filename, local_path):
     self.__get(remote_filename, local_path.name)
 
